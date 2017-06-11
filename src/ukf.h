@@ -1,15 +1,13 @@
 #ifndef UKF_H
 #define UKF_H
-
-#include "measurement_package.h"
 #include "Eigen/Dense"
+#include "measurement_package.h"
 #include <vector>
-#include <string>
-#include <fstream>
 #include "tools.h"
 
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
+using namespace std;
 
 class UKF {
 public:
@@ -17,8 +15,11 @@ public:
   ///* initially set to false, set to true in first call of ProcessMeasurement
   bool is_initialized_;
 
+  ///* previous timestamp
+  long previous_timestamp_;
+
   ///* if this is false, laser measurements will be ignored (except for init)
-  bool use_laser_;
+  bool use_lidar_;
 
   ///* if this is false, radar measurements will be ignored (except for init)
   bool use_radar_;
@@ -29,11 +30,14 @@ public:
   ///* state covariance matrix
   MatrixXd P_;
 
+  ///* augmented sigma points matrix
+  MatrixXd Xsig_aug_;
+
   ///* predicted sigma points matrix
   MatrixXd Xsig_pred_;
 
   ///* time when the state is true, in us
-  long long time_us_;
+  long time_us_;
 
   ///* Process noise standard deviation longitudinal acceleration in m/s^2
   double std_a_;
@@ -65,14 +69,17 @@ public:
   ///* Augmented state dimension
   int n_aug_;
 
+  ///* Number of sigma points (2*n_aug_ + 1)
+  int n_aug_sigma_;
+
   ///* Sigma point spreading parameter
   double lambda_;
 
   ///* the current NIS for radar
   double NIS_radar_;
 
-  ///* the current NIS for laser
-  double NIS_laser_;
+  ///* the current NIS for lidar
+  double NIS_lidar_;
 
   /**
    * Constructor
@@ -108,6 +115,20 @@ public:
    * @param meas_package The measurement at k+1
    */
   void UpdateRadar(MeasurementPackage meas_package);
+
+  void AugmentedSigmaPoints(const VectorXd &x, const MatrixXd &P, MatrixXd &Xsig_aug);
+
+  void SigmaPointPrediction(double delta_t, const MatrixXd &Xsig_aug, MatrixXd &Xsig_pred);
+
+  void PredictMeanAndCovariance(const MatrixXd &Xsig_pred, VectorXd &x, MatrixXd &P);
+
+  void PredictRadarMeasurement(const MatrixXd &Xsig_pred, MatrixXd &Zsig, VectorXd &z_pred, MatrixXd &S);
+
+  void PredictLidarMeasurement(const MatrixXd &Xsig_pred, MatrixXd &Zsig, VectorXd &z_pred, MatrixXd &S);
+
+  void UpdateState(const VectorXd &z, const VectorXd &z_pred, const MatrixXd &S,
+                   const MatrixXd &Xsig_pred, const MatrixXd &Zsig, VectorXd &x, MatrixXd &P);
+  
 };
 
 #endif /* UKF_H */
