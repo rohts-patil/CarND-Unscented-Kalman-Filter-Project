@@ -1,13 +1,13 @@
 
-#include <fstream>
 #include <iostream>
-#include <sstream>
-#include <vector>
-#include <stdlib.h>
 #include "Eigen/Dense"
+#include <vector>
 #include "ukf.h"
-#include "ground_truth_package.h"
 #include "measurement_package.h"
+#include "ground_truth_package.h"
+#include <fstream>
+#include <sstream>
+#include <stdlib.h>
 
 using namespace std;
 using Eigen::MatrixXd;
@@ -68,7 +68,6 @@ int main(int argc, char* argv[]) {
 
   vector<MeasurementPackage> measurement_pack_list;
   vector<GroundTruthPackage> gt_pack_list;
-
   string line;
 
   // prep the measurement packages (each line represents a measurement at a
@@ -78,7 +77,7 @@ int main(int argc, char* argv[]) {
     MeasurementPackage meas_package;
     GroundTruthPackage gt_package;
     istringstream iss(line);
-    long long timestamp;
+    long timestamp;
 
     // reads first element from the current line
     iss >> sensor_type;
@@ -104,124 +103,97 @@ int main(int argc, char* argv[]) {
       meas_package.sensor_type_ = MeasurementPackage::RADAR;
       meas_package.raw_measurements_ = VectorXd(3);
       float ro;
-      float phi;
+      float theta;
       float ro_dot;
       iss >> ro;
-      iss >> phi;
+      iss >> theta;
       iss >> ro_dot;
-      meas_package.raw_measurements_ << ro, phi, ro_dot;
+      meas_package.raw_measurements_ << ro, theta, ro_dot;
       iss >> timestamp;
       meas_package.timestamp_ = timestamp;
       measurement_pack_list.push_back(meas_package);
     }
 
-      // read ground truth data to compare later
-      float x_gt;
-      float y_gt;
-      float vx_gt;
-      float vy_gt;
-      iss >> x_gt;
-      iss >> y_gt;
-      iss >> vx_gt;
-      iss >> vy_gt;
-      gt_package.gt_values_ = VectorXd(4);
-      gt_package.gt_values_ << x_gt, y_gt, vx_gt, vy_gt;
-      gt_pack_list.push_back(gt_package);
+    // read ground truth data to compare later
+
+    float x_gt;
+    float y_gt;
+    float vx_gt;
+    float vy_gt;
+    iss >> x_gt;
+    iss >> y_gt;
+    iss >> vx_gt;
+    iss >> vy_gt;
+    gt_package.gt_values_ = VectorXd(4);
+    gt_package.gt_values_ << x_gt, y_gt, vx_gt, vy_gt;
+    gt_pack_list.push_back(gt_package);
+
   }
 
   // Create a UKF instance
   UKF ukf;
 
+
   // used to compute the RMSE later
   vector<VectorXd> estimations;
   vector<VectorXd> ground_truth;
 
-  // start filtering from the second frame (the speed is unknown in the first
-  // frame)
 
   size_t number_of_measurements = measurement_pack_list.size();
 
-  // column names for output file
-  out_file_ << "time_stamp" << "\t";  
-  out_file_ << "px_state" << "\t";
-  out_file_ << "py_state" << "\t";
-  out_file_ << "v_state" << "\t";
-  out_file_ << "yaw_angle_state" << "\t";
-  out_file_ << "yaw_rate_state" << "\t";
-  out_file_ << "sensor_type" << "\t";
-  out_file_ << "NIS" << "\t";  
-  out_file_ << "px_measured" << "\t";
-  out_file_ << "py_measured" << "\t";
-  out_file_ << "px_ground_truth" << "\t";
-  out_file_ << "py_ground_truth" << "\t";
-  out_file_ << "vx_ground_truth" << "\t";
-  out_file_ << "vy_ground_truth" << "\n";
-
-
+  // start filtering from the second frame (the speed is unknown in the first
+  // frame)
   for (size_t k = 0; k < number_of_measurements; ++k) {
     // Call the UKF-based fusion
     ukf.ProcessMeasurement(measurement_pack_list[k]);
 
-    // timestamp
-    out_file_ << measurement_pack_list[k].timestamp_ << "\t"; // pos1 - est
-
-    // output the state vector
+    // output the estimation
     out_file_ << ukf.x_(0) << "\t"; // pos1 - est
     out_file_ << ukf.x_(1) << "\t"; // pos2 - est
     out_file_ << ukf.x_(2) << "\t"; // vel_abs -est
     out_file_ << ukf.x_(3) << "\t"; // yaw_angle -est
     out_file_ << ukf.x_(4) << "\t"; // yaw_rate -est
 
-    // output lidar and radar specific data
+    // output the measurements
     if (measurement_pack_list[k].sensor_type_ == MeasurementPackage::LASER) {
-      // sensor type
-      out_file_ << "lidar" << "\t";
+      // output the estimation
 
-      // NIS value
-      out_file_ << ukf.NIS_laser_ << "\t";
-
-      // output the lidar sensor measurement px and py
+      // p1 - meas
       out_file_ << measurement_pack_list[k].raw_measurements_(0) << "\t";
+
+      // p2 - meas
       out_file_ << measurement_pack_list[k].raw_measurements_(1) << "\t";
-
     } else if (measurement_pack_list[k].sensor_type_ == MeasurementPackage::RADAR) {
-      // sensor type
-      out_file_ << "radar" << "\t";
-
-      // NIS value
-      out_file_ << ukf.NIS_radar_ << "\t";
-
-      // output radar measurement in cartesian coordinates
+      // output the estimation in the cartesian coordinates
       float ro = measurement_pack_list[k].raw_measurements_(0);
       float phi = measurement_pack_list[k].raw_measurements_(1);
-      out_file_ << ro * cos(phi) << "\t"; // px measurement
-      out_file_ << ro * sin(phi) << "\t"; // py measurement
+      out_file_ << ro * cos(phi) << "\t"; // p1_meas
+      out_file_ << ro * sin(phi) << "\t"; // p2_meas
     }
 
-    // output the ground truth
+    // ground truth
     out_file_ << gt_pack_list[k].gt_values_(0) << "\t";
     out_file_ << gt_pack_list[k].gt_values_(1) << "\t";
     out_file_ << gt_pack_list[k].gt_values_(2) << "\t";
-    out_file_ << gt_pack_list[k].gt_values_(3) << "\n";
+    out_file_ << gt_pack_list[k].gt_values_(3) << "\t";
 
-    // convert ukf x vector to cartesian to compare to ground truth
-    VectorXd ukf_x_cartesian_ = VectorXd(4);
+    // output the NIS
+    out_file_ << ukf.NIS_lidar_ << "\t";
+    out_file_ << ukf.NIS_radar_ << "\n";
 
-    float x_estimate_ = ukf.x_(0);
-    float y_estimate_ = ukf.x_(1);
-    float vx_estimate_ = ukf.x_(2) * cos(ukf.x_(3));
-    float vy_estimate_ = ukf.x_(2) * sin(ukf.x_(3));
-    
-    ukf_x_cartesian_ << x_estimate_, y_estimate_, vx_estimate_, vy_estimate_;
-    
-    estimations.push_back(ukf_x_cartesian_);
+
+    VectorXd x(4);
+    //x << ukf.x_(0), ukf.x_(1),ukf.x_(2), ukf.x_(3);
+    x << ukf.x_(0), ukf.x_(1),ukf.x_(2)*cos(ukf.x_(3)), ukf.x_(2)*sin(ukf.x_(3));
+    estimations.push_back(x);
     ground_truth.push_back(gt_pack_list[k].gt_values_);
 
   }
 
+
   // compute the accuracy (RMSE)
   Tools tools;
-  cout << "RMSE" << endl << tools.CalculateRMSE(estimations, ground_truth) << endl;
+  cout << "Accuracy - RMSE:" << endl << tools.CalculateRMSE(estimations, ground_truth) << endl;
 
   // close files
   if (out_file_.is_open()) {
